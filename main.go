@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -33,7 +34,7 @@ func solveZ3(ctx context.Context, input string) (string, error) {
 	cmd := exec.CommandContext(ctx, "z3", tmpfile.Name())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("error executing Z3: %w\n%s", err, output)
+		return "", fmt.Errorf("error executing Z3: %w %s", err, output)
 	}
 
 	// Z3 sometimes prints errors to stdout but exits with code 0.
@@ -50,6 +51,19 @@ func z3Tool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 	if !ok {
 		return nil, fmt.Errorf("invalid 'input' argument")
 	}
+
+	var timeoutVal int64 = 10 // Default timeout
+	if timeoutArg, ok := args["timeout"]; ok {
+		if tv, ok := timeoutArg.(int64); ok {
+			timeoutVal = tv
+		} else if tv, ok := timeoutArg.(float64); ok {
+			timeoutVal = int64(tv)
+		}
+	}
+
+	timeout := time.Duration(timeoutVal) * time.Second
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	output, err := solveZ3(ctx, input)
 	if err != nil {
@@ -74,6 +88,10 @@ func main() {
 		mcp.WithString("input",
 			mcp.Description("The SMT-LIB input to solve"),
 			mcp.Required(),
+		),
+		mcp.WithNumber("timeout",
+			mcp.Description("Timeout in seconds for the Z3 solver."),
+			mcp.DefaultNumber(10),
 		),
 	), z3Tool)
 
