@@ -3,9 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -16,22 +15,21 @@ import (
 
 // solveZ3 takes SMT-LIB input as a string, executes Z3, and returns the output.
 func solveZ3(ctx context.Context, input string) (string, error) {
-	// Create a temporary file to store the SMT-LIB input
-	tmpfile, err := ioutil.TempFile("", "smtlib_input_*.smt2")
+	// Execute Z3, passing "-in" to read from stdin
+	cmd := exec.CommandContext(ctx, "z3", "-in")
+
+	// Pipe the input to the command's stdin
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	defer os.Remove(tmpfile.Name()) // Clean up the file
-
-	if _, err := tmpfile.WriteString(input); err != nil {
-		return "", fmt.Errorf("failed to write to temporary file: %w", err)
-	}
-	if err := tmpfile.Close(); err != nil {
-		return "", fmt.Errorf("failed to close temporary file: %w", err)
+		return "", fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 
-	// Execute Z3
-	cmd := exec.CommandContext(ctx, "z3", tmpfile.Name())
+	go func() {
+		defer stdin.Close()
+		io.WriteString(stdin, input)
+	}()
+
+	// Run the command and capture the output
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("error executing Z3: %w %s", err, output)
