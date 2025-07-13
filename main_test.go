@@ -1,11 +1,44 @@
-
 package main
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
+
+func TestSandbox(t *testing.T) {
+	// Create a temporary sandbox profile that denies everything
+	sbProfile := `(version 1)
+(deny default)`
+	tmpfile, err := ioutil.TempFile("", "test.sb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpfile.Name())
+
+	if _, err := tmpfile.Write([]byte(sbProfile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpfile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run a simple command that should be denied by the sandbox
+	cmd := exec.CommandContext(context.Background(), "sandbox-exec", "-f", tmpfile.Name(), "echo", "hello")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Errorf("expected an error, but got none. output: %q", output)
+	}
+
+	// Check for the expected error message
+	expectedError := "Operation not permitted"
+	if !strings.Contains(string(output), expectedError) {
+		t.Errorf("expected error to contain %q, but got %q", expectedError, string(output))
+	}
+}
 
 func TestSolveZ3(t *testing.T) {
 	testCases := []struct {
@@ -13,6 +46,7 @@ func TestSolveZ3(t *testing.T) {
 		input         string
 		expected      string
 		expectError   bool
+		sandbox       bool // Add a sandbox flag to the test cases
 	}{
 		{
 			name: "Satisfiable",
@@ -52,7 +86,7 @@ func TestSolveZ3(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := solveZ3(context.Background(), tc.input)
+			output, err := solveZ3(context.Background(), tc.input, tc.sandbox)
 
 			if tc.expectError {
 				if err == nil {

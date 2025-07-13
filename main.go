@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,10 +14,15 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// solveZ3 takes SMT-LIB input as a string, executes Z3, and returns the output.
-func solveZ3(ctx context.Context, input string) (string, error) {
-	// Execute Z3, passing "-in" to read from stdin
-	cmd := exec.CommandContext(ctx, "z3", "-in")
+var sandbox = flag.Bool("sandbox", false, "Enable Z3 sandboxing")
+
+func solveZ3(ctx context.Context, input string, sandbox bool) (string, error) {
+	var cmd *exec.Cmd
+	if sandbox {
+		cmd = exec.CommandContext(ctx, "sandbox-exec", "-f", "z3.sb", "z3", "-in")
+	} else {
+		cmd = exec.CommandContext(ctx, "z3", "-in")
+	}
 
 	// Pipe the input to the command's stdin
 	stdin, err := cmd.StdinPipe()
@@ -63,7 +69,7 @@ func z3Tool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	output, err := solveZ3(ctx, input)
+	output, err := solveZ3(ctx, input, *sandbox)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +85,8 @@ func z3Tool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 }
 
 func main() {
+	flag.Parse()
+
 	mcpServer := server.NewMCPServer("z3-mcp", "0.1.0")
 
 	mcpServer.AddTool(mcp.NewTool("z3",
