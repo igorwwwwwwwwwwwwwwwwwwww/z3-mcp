@@ -2,41 +2,58 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestSandbox(t *testing.T) {
-	// Create a temporary sandbox profile that denies everything
-	sbProfile := `(version 1)
-(deny default)`
-	tmpfile, err := ioutil.TempFile("", "test.sb")
-	if err != nil {
-		t.Fatal(err)
+	switch runtime.GOOS {
+	case "darwin":
+		testMacOSSandbox(t)
+	case "linux":
+		testLinuxSandbox(t)
+	default:
+		t.Skipf("sandbox testing not implemented for %s", runtime.GOOS)
 	}
-	defer os.Remove(tmpfile.Name())
+}
 
-	if _, err := tmpfile.Write([]byte(sbProfile)); err != nil {
-		t.Fatal(err)
-	}
-	if err := tmpfile.Close(); err != nil {
-		t.Fatal(err)
+func testMacOSSandbox(t *testing.T) {
+	// Check if sandbox-exec is available
+	if _, err := exec.LookPath("sandbox-exec"); err != nil {
+		t.Skip("sandbox-exec not available")
 	}
 
-	// Run a simple command that should be denied by the sandbox
-	cmd := exec.CommandContext(context.Background(), "sandbox-exec", "-f", tmpfile.Name(), "echo", "hello")
+	// Test with the actual z3.sb profile - network should be denied
+	cmd := exec.CommandContext(context.Background(), "sandbox-exec", "-f", "z3.sb", "ping", "-c1", "8.8.8.8")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		t.Errorf("expected an error, but got none. output: %q", output)
+		t.Errorf("expected network to be denied, but ping succeeded. output: %q", output)
+	}
+}
+
+func testLinuxSandbox(t *testing.T) {
+	// Check if bwrap is available
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		t.Skip("bwrap (bubblewrap) not available")
 	}
 
-	// Check for the expected error message
-	expectedError := "Operation not permitted"
-	if !strings.Contains(string(output), expectedError) {
-		t.Errorf("expected error to contain %q, but got %q", expectedError, string(output))
+	// Test network isolation - ping should fail
+	cmd := exec.CommandContext(context.Background(), "bwrap",
+		"--ro-bind", "/usr", "/usr",
+		"--ro-bind", "/lib", "/lib",
+		"--ro-bind", "/bin", "/bin",
+		"--tmpfs", "/tmp",
+		"--proc", "/proc",
+		"--dev", "/dev",
+		"--unshare-net",
+		"--die-with-parent",
+		"ping", "-c1", "8.8.8.8")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Errorf("expected network to be denied, but ping succeeded. output: %q", output)
 	}
 }
 

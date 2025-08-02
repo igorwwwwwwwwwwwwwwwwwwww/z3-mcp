@@ -10,25 +10,41 @@ This server exposes Z3's constraint solving capabilities through MCP, allowing A
 
 - **Z3 Integration**: Execute Z3 constraint solver on SMT-LIB input
 - **Configurable Timeout**: Set custom timeout values for solver operations (default: 10 seconds)
-- **Optional Sandboxing**: Run Z3 in a sandboxed environment on macOS for enhanced security
+- **Cross-Platform Sandboxing**: Run Z3 in a sandboxed environment on macOS and Linux for enhanced security
 - **MCP Protocol**: Standard Model Context Protocol interface for tool integration
 
 ## Prerequisites
 
 - Go 1.24.4 or later
 - Z3 theorem prover installed on your system
-- On macOS: `sandbox-exec` command available (for sandboxing feature)
+- For sandboxing:
+  - **macOS**: `sandbox-exec` command (built-in)
+  - **Linux**: `bwrap` (bubblewrap) package
 
-### Installing Z3
+### Installing Dependencies
 
-**macOS (Homebrew):**
+**Z3 Theorem Prover:**
+
+*macOS (Homebrew):*
 ```bash
 brew install z3
 ```
 
-**Linux (Ubuntu/Debian):**
+*Linux (Ubuntu/Debian):*
 ```bash
 sudo apt-get install z3
+```
+
+**Sandboxing Dependencies:**
+
+*Linux (Ubuntu/Debian):*
+```bash
+sudo apt-get install bubblewrap
+```
+
+*Linux (Fedora/RHEL):*
+```bash
+sudo dnf install bubblewrap
 ```
 
 **Other platforms:**
@@ -61,12 +77,16 @@ Start the server on stdin/stdout (standard MCP mode):
 ./z3-mcp-server
 ```
 
-### With Sandboxing (macOS only)
+### With Sandboxing
 
 Enable sandboxing for enhanced security:
 ```bash
 ./z3-mcp-server -sandbox
 ```
+
+The sandboxing implementation varies by platform:
+- **macOS**: Uses `sandbox-exec` with the included `z3.sb` profile
+- **Linux**: Uses `bubblewrap` with network isolation and read-only filesystem access
 
 ### Docker
 
@@ -75,6 +95,15 @@ Build and run using Docker:
 docker build -t z3-mcp .
 docker run -i z3-mcp
 ```
+
+#### Docker with Seccomp Profile
+
+For enhanced security, run the container with the included seccomp profile:
+```bash
+docker run --security-opt seccomp=./seccomp-profile.json -i z3-mcp
+```
+
+The seccomp profile is based on Docker's official default profile with all network-related syscalls removed, providing production-grade security while maintaining full container compatibility.
 
 ## MCP Tool Interface
 
@@ -104,11 +133,15 @@ Executes the Z3 constraint solver on SMT-LIB input.
 
 When enabled with the `-sandbox` flag, Z3 runs within a restricted sandbox that:
 - Denies network access
-- Restricts file system writes
+- Restricts file system writes  
 - Allows only necessary file reads
 - Limits process execution to Z3 only
+- Isolates process namespace (Linux)
 
-The sandbox profile is defined in `z3.sb` and follows macOS sandbox format.
+**Platform-specific implementations:**
+- **macOS**: Uses `sandbox-exec` with the `z3.sb` profile
+- **Linux**: Uses `bubblewrap` with comprehensive filesystem and network isolation
+- **Docker**: Custom seccomp profile (`seccomp-profile.json`) restricting system calls
 
 ## License
 

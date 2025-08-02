@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,7 +20,30 @@ var sandbox = flag.Bool("sandbox", false, "Enable Z3 sandboxing")
 func solveZ3(ctx context.Context, input string, sandbox bool) (string, error) {
 	var cmd *exec.Cmd
 	if sandbox {
-		cmd = exec.CommandContext(ctx, "sandbox-exec", "-f", "z3.sb", "z3", "-in")
+		switch runtime.GOOS {
+		case "darwin":
+			// macOS: use sandbox-exec
+			cmd = exec.CommandContext(ctx, "sandbox-exec", "-f", "z3.sb", "z3", "-in")
+		case "linux":
+			// bwrap --ro-bind /usr /usr --ro-bind /lib /lib --unshare-all --die-with-parent --new-session
+			// Linux: use bubblewrap for sandboxing
+			cmd = exec.CommandContext(ctx, "bwrap",
+				"--ro-bind", "/usr", "/usr",
+				"--ro-bind", "/lib", "/lib",
+				// "--ro-bind", "/lib64", "/lib64",
+				"--ro-bind", "/bin", "/bin",
+				"--ro-bind", "/sbin", "/sbin",
+				"--tmpfs", "/tmp",
+				"--proc", "/proc",
+				"--dev", "/dev",
+				"--unshare-net",
+				"--unshare-pid",
+				"--die-with-parent",
+				"--new-session",
+				"z3", "-in")
+		default:
+			return "", fmt.Errorf("sandboxing not supported on %s", runtime.GOOS)
+		}
 	} else {
 		cmd = exec.CommandContext(ctx, "z3", "-in")
 	}
