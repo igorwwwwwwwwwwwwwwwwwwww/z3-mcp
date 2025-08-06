@@ -22,7 +22,7 @@ func solveZ3(ctx context.Context, input string, sandbox bool) (string, error) {
 	if sandbox {
 		switch runtime.GOOS {
 		case "darwin":
-			// macOS: use sandbox-exec
+			// macOS: use sandbox-exec with restrictive deny-default profile
 			cmd = exec.CommandContext(ctx, "sandbox-exec", "-f", "z3.sb", "z3", "-in")
 		case "linux":
 			// bwrap --ro-bind /usr /usr --ro-bind /lib /lib --unshare-all --die-with-parent --new-session

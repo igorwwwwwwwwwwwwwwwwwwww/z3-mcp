@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -59,18 +58,18 @@ func testLinuxSandbox(t *testing.T) {
 
 func TestSolveZ3(t *testing.T) {
 	testCases := []struct {
-		name          string
-		input         string
-		expected      string
-		expectError   bool
-		sandbox       bool // Add a sandbox flag to the test cases
+		name        string
+		input       string
+		expected    string
+		expectError bool
+		sandbox     bool // Add a sandbox flag to the test cases
 	}{
 		{
 			name: "Satisfiable",
 			input: `(declare-const p Bool)
 (assert p)
 (check-sat)`,
-			expected: "sat",
+			expected:    "sat",
 			expectError: false,
 		},
 		{
@@ -79,14 +78,14 @@ func TestSolveZ3(t *testing.T) {
 (assert p)
 (assert (not p))
 (check-sat)`,
-			expected: "unsat",
+			expected:    "unsat",
 			expectError: false,
 		},
 		{
 			name: "Invalid Input",
 			input: `(declare-const p Bool)
 (invalid-command)`,
-			expected: "error", // We expect an error message from Z3
+			expected:    "error", // We expect an error message from Z3
 			expectError: true,
 		},
 		{
@@ -96,7 +95,7 @@ func TestSolveZ3(t *testing.T) {
 (assert (> x y))
 (assert (= x 10))
 (check-sat)`,
-			expected: "sat",
+			expected:    "sat",
 			expectError: false,
 		},
 	}

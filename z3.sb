@@ -1,16 +1,152 @@
-(version 1)
-(allow default)
+(version 3)
+
+;; Use Apple's best practices for deny-default profiles
+(deny default)
+(deny dynamic-code-generation)
+(deny file-map-executable process-info* nvram*)
+(deny mach-priv-host-port)
+
+;; Import essential system support
+(import "dyld-support.sb")
+
+;; Critical for process launching
+(allow mach-bootstrap)
+
+;; Allow read access to standard system paths - using Apple's pattern
+(allow file-read*
+    (require-all (file-mode #o0004)
+                 (require-any (subpath "/System")
+                              (subpath "/usr/lib")
+                              (subpath "/usr/share")
+                              (subpath "/private/var/db/dyld"))))
+
+;; Re-allow essential file mapping that was denied above
+(allow file-map-executable
+    (subpath "/System/Library")
+    (subpath "/usr/lib")
+    (literal "/opt/homebrew/bin/z3")
+    (literal "/opt/homebrew/Cellar/z3/4.15.2/bin/z3")
+    (subpath "/opt/homebrew/lib")
+    (subpath "/opt/homebrew/Cellar"))
+
+;; Re-allow essential process info for Z3
+(allow process-info* (target self))
+
+;; Essential file operations (using Apple's pattern)
+(allow file-read-metadata file-test-existence)
+
+;; Allow path resolution like Apple profiles do
+(allow file-read-metadata file-test-existence
+    (literal "/etc")
+    (literal "/tmp")
+    (literal "/var")
+    (literal "/private/etc/localtime"))
+
+;; Essential device files
+(allow file-read* file-write-data
+    (literal "/dev/null")
+    (literal "/dev/zero"))
+(allow file-read*
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+(allow file-read* file-write-data file-ioctl
+    (literal "/dev/dtracehelper"))
+
+;; Basic Mach operations
+(allow mach-lookup
+    (global-name "com.apple.logd")
+    (global-name "com.apple.system.logger"))
+
+;; Clock and timing access
+(allow syscall-mig
+    (kernel-mig-routine clock_get_time
+                        host_get_clock_service
+                        host_info))
+
+;; Essential syscalls with proper names from airlock.sb
+(allow syscall-unix
+    (syscall-group-read)
+    (syscall-group-write) 
+    (syscall-group-close)
+    (syscall-group-open)
+    (syscall-group-stat)
+    (syscall-group-fcntl)
+    (syscall-group-bsdthread)
+    (syscall-group-pthread)
+    (syscall-group-kevent)
+    (syscall-group-kqueue)
+    (syscall-group-signal)
+    (syscall-number SYS_exit
+                    SYS_execve
+                    SYS_posix_spawn
+                    SYS_fork
+                    SYS_vfork
+                    SYS_mmap
+                    SYS_munmap
+                    SYS_mprotect
+                    SYS_dup
+                    SYS_dup2
+                    SYS_issetugid
+                    SYS_getuid
+                    SYS_geteuid
+                    SYS_getgid
+                    SYS_getegid
+                    SYS_getpid
+                    SYS_getppid
+                    SYS_gettimeofday
+                    SYS_getentropy
+                    232
+                    SYS_thread_selfid
+                    SYS_access
+                    SYS_faccessat
+                    SYS_shared_region_check_np
+                    SYS_shared_region_map_and_slide_2_np
+                    SYS_proc_info
+                    SYS_workq_kernreturn
+                    SYS_workq_open
+                    SYS_pipe
+                    SYS_socketpair
+                    SYS_setitimer
+                    SYS_csops_audittoken
+                    SYS_sysctlbyname
+                    SYS_getattrlist
+                    SYS_fsgetpath
+                    SYS_csrctl))
+
+;; Essential Mach traps (following Apple's airlock pattern)
+(allow syscall-mach
+    (machtrap-number MSC__kernelrpc_mach_port_allocate_trap
+                     MSC__kernelrpc_mach_port_construct_trap
+                     MSC__kernelrpc_mach_port_deallocate_trap
+                     MSC__kernelrpc_mach_port_destruct_trap
+                     MSC__kernelrpc_mach_port_guard_trap
+                     MSC__kernelrpc_mach_port_insert_right_trap
+                     MSC__kernelrpc_mach_port_mod_refs_trap
+                     MSC__kernelrpc_mach_vm_allocate_trap
+                     MSC__kernelrpc_mach_vm_deallocate_trap
+                     MSC__kernelrpc_mach_vm_map_trap
+                     MSC__kernelrpc_mach_vm_protect_trap
+                     MSC_host_self_trap
+                     MSC_mach_generate_activity_id
+                     MSC_mach_reply_port
+                     MSC_thread_get_special_reply_port
+                     MSC_host_create_mach_voucher_trap
+                     MSC_mach_timebase_info_trap
+                     MSC_task_self_trap))
+
+;; System MAC syscalls
+(allow system-mac-syscall
+    (mac-policy-name "AMFI")
+    (mac-policy-name "Sandbox"))
+
+;; Additional process info beyond what's already allowed above
+(allow sysctl-read)
+
+;; Allow Z3 execution
+(allow process-exec
+    (literal "/opt/homebrew/bin/z3")
+    (subpath "/opt/homebrew/Cellar/z3"))
+
+;; Security restrictions
 (deny network*)
 (deny file-write*)
-(allow file-read* 
-    (literal "/bin/ps")
-    (literal "/dev/null")
-    (literal "/dev/random")
-    (literal "/dev/urandom")
-    (literal "/dev/zero")
-    (subpath "/private/var/db/dyld")
-    (subpath "/usr/lib")
-    (subpath "/usr/share")
-    (subpath "/Library/Preferences/.GlobalPreferences.plist")
-)
-(allow process-exec (literal "/opt/homebrew/bin/z3"))
